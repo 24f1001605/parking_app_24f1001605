@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Admin Dashboard</h2>
+        <hr>
+    </div>
+</div>
+
+<!-- Search Section -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Search Parking Spot</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('admin.dashboard') }}">
+                    <div class="input-group">
+                        <input type="number" name="spot_id" class="form-control" placeholder="Enter Spot ID" value="{{ request.args.get('spot_id', '') }}">
+                        <button class="btn btn-primary" type="submit">Search</button>
+                    </div>
+                </form>
+                {% if searched_spot %}
+                    <div class="mt-3">
+                        <h6>Spot #{{ searched_spot.spot_number }} ({{ searched_spot.lot.prime_location_name }})</h6>
+                        <p>Status: 
+                            {% if searched_spot.status == 'A' %}
+                                <span class="badge bg-success">Available</span>
+                            {% else %}
+                                <span class="badge bg-danger">Occupied</span>
+                                {% if active_reservation %}
+                                    <br>Occupied by: {{ active_reservation.user.username }}
+                                    <br>Since: {{ active_reservation.parked_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% endif %}
+                            {% endif %}
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Parking Spot Occupancy</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="occupancyChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Revenue by Parking Lot</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="revenueChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Parking Lots Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Parking Lots</h5>
+                <a href="{{ url_for('admin.lot_create') }}" class="btn btn-success">Add New Lot</a>
+            </div>
+            <div class="card-body">
+                {% if lots %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Location</th>
+                                    <th>Address</th>
+                                    <th>Pincode</th>
+                                    <th>Price/Hour</th>
+                                    <th>Spots</th>
+                                    <th>Available</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lot in lots %}
+                                <tr>
+                                    <td>{{ lot.id }}</td>
+                                    <td>{{ lot.prime_location_name }}</td>
+                                    <td>{{ lot.address }}</td>
+                                    <td>{{ lot.pincode }}</td>
+                                    <td>₹{{ "%.2f"|format(lot.price_per_hour) }}</td>
+                                    <td>{{ lot.max_spots }}</td>
+                                    <td>
+                                        {% set occupied = lot.spots|selectattr('status', 'equalto', 'O')|list|length %}
+                                        {{ lot.max_spots - occupied }}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('admin.lot_edit', lot_id=lot.id) }}" class="btn btn-sm btn-primary">Edit</a>
+                                        <form method="POST" action="{{ url_for('admin.lot_delete', lot_id=lot.id) }}" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No parking lots created yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Users Section -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Registered Users</h5>
+            </div>
+            <div class="card-body">
+                {% if users %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td>{{ user.id }}</td>
+                                    <td>{{ user.username }}</td>
+                                    <td>{{ user.role }}</td>
+                                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No users registered yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Chart data from Flask
+const occupancyLabels = {{ occupancy_labels|tojson }};
+const occupiedData = {{ occupied_data|tojson }};
+const availableData = {{ available_data|tojson }};
+const revenueLabels = {{ revenue_labels|tojson }};
+const revenueData = {{ revenue_data|tojson }};
+
+// Wait for charts to be ready
+if (window.chartsReady) {
+    renderAdminCharts(occupancyLabels, occupiedData, availableData, revenueLabels, revenueData);
+} else {
+    // Retry if charts aren't ready yet
+    setTimeout(() => {
+        if (window.chartsReady) {
+            renderAdminCharts(occupancyLabels, occupiedData, availableData, revenueLabels, revenueData);
+        } else {
+            console.error('renderAdminCharts function not found. Retrying...');
+        }
+    }, 1000);
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>User Dashboard</h2>
+        <hr>
+    </div>
+</div>
+
+<!-- Active Booking Section -->
+{% if active_res %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Active Parking Reservation</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Parking Lot:</strong> {{ active_res.spot.lot.prime_location_name }}</p>
+                        <p><strong>Spot Number:</strong> {{ active_res.spot.spot_number }}</p>
+                        <p><strong>Parked Since:</strong> {{ active_res.parked_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Address:</strong> {{ active_res.spot.lot.address }}, {{ active_res.spot.lot.pincode }}</p>
+                        <p><strong>Price/Hour:</strong> ₹{{ "%.2f"|format(active_res.spot.lot.price_per_hour) }}</p>
+                        <form method="POST" action="{{ url_for('user.release', reservation_id=active_res.id) }}" class="mt-3">
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to release this spot?')">
+                                Release Spot
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Book New Spot Section -->
+{% if not active_res %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Book a Parking Spot</h5>
+            </div>
+            <div class="card-body">
+                {% if lots %}
+                    <form method="POST" action="{{ url_for('user.book') }}">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <select name="lot_id" class="form-select" required>
+                                    <option value="">Select a parking lot...</option>
+                                    {% for lot in lots %}
+                                        {% set available_spots = lot.spots|selectattr('status', 'equalto', 'A')|list|length %}
+                                        {% if available_spots > 0 %}
+                                            <option value="{{ lot.id }}">
+                                                {{ lot.prime_location_name }} - {{ lot.address }}, {{ lot.pincode }} - ₹{{ "%.2f"|format(lot.price_per_hour) }}/hour - {{ available_spots }}/{{ lot.max_spots }} spots available
+                                            </option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary">Book Spot</button>
+                            </div>
+                        </div>
+                    </form>
+                {% else %}
+                    <p class="text-muted">No parking lots available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- History Chart -->
+{% if chart_labels %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Parking History by Lot</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="userHistoryChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Parking History -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Parking History</h5>
+            </div>
+            <div class="card-body">
+                {% if history %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Parking Lot</th>
+                                    <th>Address</th>
+                                    <th>Pincode</th>
+                                    <th>Spot</th>
+                                    <th>Duration</th>
+                                    <th>Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for reservation in history %}
+                                <tr>
+                                    <td>{{ reservation.parked_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>{{ reservation.spot.lot.prime_location_name }}</td>
+                                    <td>{{ reservation.spot.lot.address }}</td>
+                                    <td>{{ reservation.spot.lot.pincode }}</td>
+                                    <td>{{ reservation.spot.spot_number }}</td>
+                                    <td>
+                                        {% if reservation.released_at %}
+                                            {{ ((reservation.released_at - reservation.parked_at).total_seconds() / 3600)|round(1) }} hours
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if reservation.total_cost %}
+                                            ₹{{ "%.2f"|format(reservation.total_cost) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No parking history yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Chart data from Flask
+const chartLabels = {{ chart_labels|tojson }};
+const chartValues = {{ chart_values|tojson }};
+
+// Wait for charts to be ready
+if (window.chartsReady) {
+    renderUserChart(chartLabels, chartValues);
+} else {
+    // Retry if charts aren't ready yet
+    setTimeout(() => {
+        if (window.chartsReady) {
+            renderUserChart(chartLabels, chartValues);
+        } else {
+            console.error('renderUserChart function not found. Retrying...');
+        }
+    }, 1000);
+}
+</script>
+{% endblock %} 
