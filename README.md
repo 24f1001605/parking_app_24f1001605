@@ -1,5 +1,4 @@
 # Vehicle Parking App – V1 (MAD-1, IIT Madras)
-Root folder: **parking_app_24f1001605**
 
 ## Tech Stack
 - **Backend**: Flask
